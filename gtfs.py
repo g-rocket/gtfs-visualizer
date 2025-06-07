@@ -4,6 +4,7 @@ import argparse
 import io
 import os
 import zipfile
+import subprocess
 
 import PIL.Image, PIL.ImageDraw
 
@@ -14,6 +15,7 @@ def main():
     p.add_argument('output', help='Image file to save')
     p.add_argument('--width', type=int, default=800)
     p.add_argument('--color', action='store_true')
+    p.add_argument('--open', action='store_true')
 
     args = p.parse_args()
 
@@ -23,6 +25,9 @@ def main():
         colors = {}
 
     draw_shapes(args, colors)
+
+    if args.open:
+        subprocess.Popen(['feh', args.output])
 
 def get_colors(args):
     with open_file(args, 'routes.txt') as routes:
@@ -42,13 +47,13 @@ def get_colors(args):
 def draw_shapes(args, colors):
     with open_file(args, 'shapes.txt') as shapefile:
         shapefile.readline()
-        _, (lat, lon), _ = parse_shape_line(shapefile.readline())
+        _, (lat, lon) = parse_shape_line(shapefile.readline())
         minlat = lat
         maxlat = lat
         minlon = lon
         maxlon = lon
         for line in shapefile:
-            _, (lat, lon), _ = parse_shape_line(line)
+            _, (lat, lon) = parse_shape_line(line)
             if lat < minlat:
                 minlat = lat
             if lat > maxlat:
@@ -60,7 +65,7 @@ def draw_shapes(args, colors):
         shapefile.seek(0)
         shapefile.readline()
         width = args.width
-        height = int(args.width * (maxlon - minlon) / (maxlat - minlat))
+        height = int((args.width-10) * (maxlon - minlon) / (maxlat - minlat))+10
 
         image = PIL.Image.new('RGB', (width, height), color=(255,255,255))
         draw = PIL.ImageDraw.Draw(image)
@@ -68,9 +73,9 @@ def draw_shapes(args, colors):
         px = None
         py = None
         for line in shapefile:
-            id, (lat, lon), _ = parse_shape_line(line)
-            x = int((lat - minlat) * width / (maxlat - minlat))
-            y = int((lon - minlon) * width / (maxlon - minlon))
+            id, (lat, lon) = parse_shape_line(line)
+            x = int((lat - minlat) * (width-10) / (maxlat - minlat))+5
+            y = int((lon - minlon) * (height-10) / (maxlon - minlon))+5
             if id == lastid:
                 draw.line((px, py, x, y), fill=colors.get(id, '#000000'))
             px = x
@@ -82,14 +87,13 @@ def draw_shapes(args, colors):
 def parse_shape_line(line):
     parts = line.rstrip('\n').split(',')
     # ID, (lat, lon), seqnum
-    return parts[0], (float(parts[2]), -float(parts[1])), int(parts[3])
+    return parts[0], (float(parts[2]), -float(parts[1]))
 
 def open_file(args, name):
     if os.path.isdir(args.gtfs):
         return open(os.path.join(args.gtfs, name), encoding='utf-8')
     elif zipfile.is_zipfile(args.gtfs):
         return io.TextIOWrapper(zipfile.ZipFile(args.gtfs).open(name), encoding='utf-8')
-    
 
 if __name__ == '__main__':
     main()
