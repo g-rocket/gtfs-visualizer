@@ -13,12 +13,33 @@ def main():
     p.add_argument('gtfs', type=os.path.realpath, help='Path to gtfs directory')
     p.add_argument('output', help='Image file to save')
     p.add_argument('--width', type=int, default=800)
+    p.add_argument('--color', action='store_true')
 
     args = p.parse_args()
 
-    draw_shapes(args)
+    if args.color:
+        colors = get_colors(args)
+    else:
+        colors = {}
 
-def draw_shapes(args):
+    draw_shapes(args, colors)
+
+def get_colors(args):
+    with open_file(args, 'routes.txt') as routes:
+        route_colors = {}
+        for line in routes:
+            items = line.rstrip('\n').split(',')
+            if len(items) > 7 and items[7]:
+                route_colors[items[0]] = items[7]
+    shape_colors = {}
+    with open_file(args, 'trips.txt') as trips:
+        for line in trips:
+            items = line.rstrip('\n').split(',')
+            if len(items) > 7 and items[7] and items[0] in route_colors:
+                shape_colors[items[7]] = '#' + route_colors[items[0]]
+    return shape_colors
+
+def draw_shapes(args, colors):
     with open_file(args, 'shapes.txt') as shapefile:
         shapefile.readline()
         _, (lat, lon), _ = parse_shape_line(shapefile.readline())
@@ -51,7 +72,7 @@ def draw_shapes(args):
             x = int((lat - minlat) * width / (maxlat - minlat))
             y = int((lon - minlon) * width / (maxlon - minlon))
             if id == lastid:
-                draw.line((px, py, x, y), fill=128)
+                draw.line((px, py, x, y), fill=colors.get(id, '#000000'))
             px = x
             py = y
             lastid = id
@@ -61,7 +82,7 @@ def draw_shapes(args):
 def parse_shape_line(line):
     parts = line.rstrip('\n').split(',')
     # ID, (lat, lon), seqnum
-    return parts[0], (float(parts[1]), float(parts[2])), int(parts[3])
+    return parts[0], (float(parts[2]), -float(parts[1])), int(parts[3])
 
 def open_file(args, name):
     if os.path.isdir(args.gtfs):
